@@ -57,7 +57,9 @@ assumed.
 | `-chrome` | auto-detect | Chrome/Chromium binary |
 | `-width` / `-height` | `800` / `480` | panel size, i.e. the screenshot viewport |
 | `-render-every` | `0` | re-render at least every N seconds even when nothing changed (for clocks); `0` = only on change |
-| `-render` | | render every page to a PNG and exit |
+| `-preview` | | render every page to a PNG and exit, without serving (`-render` is an alias) |
+| `-script` | | shell script to run periodically, e.g. one that refreshes the JSON files |
+| `-script-interval` | `5m` | how often `-script` runs, independent of `-interval` |
 | `-version` | | print version |
 
 `-render out.png` is the quick way to check a layout without a device; with more
@@ -124,6 +126,27 @@ quarter of the size.
 The filename is `<page>-<hash6>-<unixtime>`: same inputs, same hash; a new
 timestamp only when the bytes change. That is the device's cache key, and the
 firmware drops any name longer than 31 characters.
+
+## Refreshing data on a timer
+
+`-script` runs a shell script on tape-drive's own timer, independent of the page
+interval. It runs once at startup and then every `-script-interval`:
+
+```bash
+tape-drive -templates ./templates -data ~/.local/share/screens -pages ./pages.json \
+  -script ./refresh.sh -script-interval 5m -interval 2m
+```
+
+The device flips pages every 2 minutes while the script refreshes the JSON every
+5: the next render picks up whatever the script wrote, because the cache keys on
+file contents rather than on time.
+
+- Runs never overlap — a script slower than the interval delays the next tick
+  instead of stacking up.
+- A failing script is logged with its output and the loop keeps going, so a
+  flaky network or a missing command never takes the server down.
+- With `-preview`, the script runs once first, so the exported PNGs show fresh
+  data.
 
 ## Endpoints
 

@@ -66,7 +66,10 @@ func main() {
 	width := flag.Int("width", 800, "screen width in pixels")
 	height := flag.Int("height", 480, "screen height in pixels")
 	renderEvery := flag.Int("render-every", 0, "re-render at least every N seconds even when template and data are unchanged (for clocks); 0 = only on change")
-	renderPath := flag.String("render", "", "render every page to this PNG path and exit")
+	previewPath := flag.String("preview", "", "render every page to this PNG path and exit, without serving")
+	renderPath := flag.String("render", "", "alias for -preview")
+	scriptPath := flag.String("script", "", "shell script to run periodically, e.g. one that refreshes the JSON files")
+	scriptEvery := flag.Duration("script-interval", 5*time.Minute, "how often to run -script, e.g. 30s or 5m (independent of -interval)")
 	showVersion := flag.Bool("version", false, "print the version and exit")
 	flag.Parse()
 
@@ -92,6 +95,14 @@ func main() {
 	if *renderEvery < 0 {
 		log.Fatal("-render-every cannot be negative")
 	}
+	if *scriptEvery <= 0 {
+		log.Fatal("-script-interval must be positive")
+	}
+	if *scriptPath != "" {
+		if _, err := os.Stat(*scriptPath); err != nil {
+			log.Fatalf("script: %v", err)
+		}
+	}
 	tick := time.Duration(*renderEvery) * time.Second
 
 	renderers := make([]*Renderer, len(pages))
@@ -99,9 +110,20 @@ func main() {
 		renderers[index] = NewRenderer(page, index+1, len(pages), *width, *height, *chrome, tick)
 	}
 
-	if *renderPath != "" {
-		renderAll(context.Background(), renderers, pageNames(pages), *renderPath)
+	// A preview export runs once and exits, refreshing the data first if a
+	// script was given, so the PNG matches what the device would get.
+	if output := firstNonEmpty(*previewPath, *renderPath); output != "" {
+		ctx := context.Background()
+		if *scriptPath != "" {
+			runScript(ctx, *scriptPath)
+		}
+		renderAll(ctx, renderers, pageNames(pages), output)
 		return
+	}
+
+	if *scriptPath != "" {
+		log.Printf("running %s every %s (first run now)", *scriptPath, *scriptEvery)
+		go runScriptLoop(context.Background(), *scriptPath, *scriptEvery)
 	}
 
 	server := &Server{
@@ -144,6 +166,17 @@ func pageNames(pages []Page) []string {
 		names[index] = page.Name
 	}
 	return names
+}
+
+// firstNonEmpty returns the first value that is set, so a flag and its alias
+// can share one code path.
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if value != "" {
+			return value
+		}
+	}
+	return ""
 }
 
 // renderAll writes one PNG per page and exits, for checking layouts without the
