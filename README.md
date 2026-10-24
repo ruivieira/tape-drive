@@ -7,6 +7,8 @@ directory of Go HTML templates and a directory of JSON files, and it serves the
 firmware API, screenshots each page with headless Chrome and hands the device a
 1-bit PNG.
 
+![A tape-drive page rendered to 1-bit e-ink: a photo of a film archive on the left, the build specs on the right](images/hero.png)
+
 Nothing about the content is compiled in. Templates and data are read from disk
 on every render, the JSON is handed to the template untouched, and the playlist
 is just a manifest of template/data pairs.
